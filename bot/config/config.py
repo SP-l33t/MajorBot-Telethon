@@ -7,9 +7,9 @@ class Settings(BaseSettings):
     API_ID: int
     API_HASH: str
    
-    REF_ID: str = '339631649'
+    REF_ID: str = '525256526'
     TASKS_WITH_JOIN_CHANNEL: bool = True
-    HOLD_COIN: list[int] = [585, 600]
+    HOLD_COIN: list[int] = [915, 915]
     SWIPE_COIN: list[int] = [2000, 3000]
     SUBSCRIBE_HIDDEN_CODE: bool = True
     USE_RANDOM_DELAY_IN_RUN: bool = True
@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     
     USE_PROXY_FROM_FILE: bool = False
 
+    DEVICE_PARAMS: bool = False
+
+    DEBUG_LOGGING: bool = False
+
 
 settings = Settings()
-
-
