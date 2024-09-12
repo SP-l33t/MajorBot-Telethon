@@ -6,7 +6,7 @@ import os
 import random
 import time
 from urllib.parse import unquote
-
+from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from better_proxy import Proxy
 
@@ -18,9 +18,9 @@ from telethon.functions import messages, contacts, channels
 from .agents import generate_random_user_agent
 from bot.config import settings
 from typing import Callable
-from bot.utils import logger, proxy_utils
+from bot.utils import logger, proxy_utils, config_utils
 from bot.exceptions import InvalidSession
-from .headers import headers
+from .headers import headers, get_sec_ch_ua
 
 
 def error_handler(func: Callable):
@@ -35,12 +35,25 @@ def error_handler(func: Callable):
 
 
 class Tapper:
-    def __init__(self, tg_client: TelegramClient, proxy: str):
+    def __init__(self, tg_client: TelegramClient):
         self.tg_client = tg_client
         self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
-        self.proxy = proxy
+        self.config = config_utils.get_session_config(self.session_name)
+        self.proxy = self.config.get('proxy', None)
         self.tg_web_data = None
         self.tg_client_id = 0
+        self.headers = headers
+        self.headers['User-Agent'] = self.check_user_agent()
+        self.headers.update(**get_sec_ch_ua(self.headers.get('User-Agent', '')))
+
+    def check_user_agent(self):
+        user_agent = self.config.get('user_agent')
+        if not user_agent:
+            user_agent = generate_random_user_agent()
+            self.config['user_agent'] = user_agent
+            config_utils.update_config_file(self.session_name, self.config)
+
+        return user_agent
 
     async def get_tg_web_data(self) -> tuple[str, str]:
 
@@ -107,7 +120,6 @@ class Tapper:
             await asyncio.sleep(delay=3)
             return None, None
 
-    # TODO возможно нужен фикс
     async def join_and_mute_tg_channel(self, link: str):
         link = link if 'https://t.me/+' in link else link[13:]
         if link == 'money':
@@ -255,40 +267,34 @@ class Tapper:
             logger.info(f"{self.session_name} | Bot will start in <y>{random_delay}s</y>")
             await asyncio.sleep(random_delay)
 
-        proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
-        http_client = aiohttp.ClientSession(headers=headers, connector=proxy_conn)
-        ref_id, init_data = await self.get_tg_web_data()
-
-        if not init_data:
-            if not http_client.closed:
-                await http_client.close()
-            if proxy_conn:
-                if not proxy_conn.closed:
-                    proxy_conn.close()
-            return
-
+        proxy_conn = None
         if self.proxy:
+            proxy_conn = ProxyConnector().from_url(self.proxy)
+            http_client = CloudflareScraper(headers=self.headers, connector=proxy_conn)
             p_type = proxy_conn._proxy_type
             p_host = proxy_conn._proxy_host
             p_port = proxy_conn._proxy_port
             if not await self.check_proxy(http_client=http_client, proxy=f"{p_type}://{p_host}:{p_port}"):
                 return
+        else:
+            http_client = CloudflareScraper(headers=self.headers)
+        ref_id, init_data = await self.get_tg_web_data()
 
-        if settings.FAKE_USERAGENT:
-            http_client.headers['User-Agent'] = generate_random_user_agent(device_type='android', browser_type='chrome')
+        if not init_data:
+            if not http_client.closed:
+                await http_client.close()
+            if proxy_conn and not proxy_conn.closed:
+                proxy_conn.close()
+            return
 
         while True:
             try:
                 if http_client.closed:
-                    if proxy_conn:
-                        if not proxy_conn.closed:
-                            proxy_conn.close()
+                    if proxy_conn and not proxy_conn.closed:
+                        proxy_conn.close()
 
                     proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
-                    http_client = aiohttp.ClientSession(headers=headers, connector=proxy_conn)
-                    if settings.FAKE_USERAGENT:
-                        http_client.headers['User-Agent'] = generate_random_user_agent(device_type='android',
-                                                                                       browser_type='chrome')
+                    http_client = aiohttp.ClientSession(headers=self.headers, connector=proxy_conn)
 
                 user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
                 if not user_data:
@@ -392,9 +398,9 @@ class Tapper:
             await asyncio.sleep(delay=sleep_time)
 
 
-async def run_tapper(tg_client: TelegramClient, proxy: str | None):
+async def run_tapper(tg_client: TelegramClient):
     try:
-        await Tapper(tg_client=tg_client, proxy=proxy).run()
+        await Tapper(tg_client=tg_client).run()
     except InvalidSession:
         session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
         logger.error(f"{session_name} | Invalid Session")

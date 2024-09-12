@@ -33,8 +33,7 @@ async def register_sessions() -> None:
             }
         )
 
-    accounts_config_path = 'bot/config/accounts_config.json'
-    accounts_config = config_utils.read_or_create_config_file(accounts_config_path)
+    accounts_config = config_utils.read_config_file()
     accounts_data = {
         f'{session_name}':
             {
@@ -48,9 +47,12 @@ async def register_sessions() -> None:
     if settings.USE_PROXY_FROM_FILE:
         proxies = proxy_utils.get_unused_proxies(accounts_config)
         if proxies:
-            proxy_str = proxies[0]
-            proxy = proxy_utils.to_telethon_proxy(Proxy.from_str(proxy_str))
-            accounts_data['proxy'] = proxy_str
+            for prox in proxies:
+                if proxy_utils.check_proxy(prox):
+                    proxy_str = prox
+                    proxy = proxy_utils.to_telethon_proxy(Proxy.from_str(proxy_str))
+                    accounts_data['proxy'] = proxy_str
+                    break
         else:
             raise Exception('No unused proxies left')
     else:
@@ -74,7 +76,7 @@ async def register_sessions() -> None:
     user_data = await session.get_me()
 
     if user_data:
-        config_utils.write_config_file(accounts_config_path, accounts_config)
+        config_utils.write_config_file(accounts_config)
         logger.success(
             f'Session added successfully @{user_data.username} | {user_data.first_name} {user_data.last_name}'
         )

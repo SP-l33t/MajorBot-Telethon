@@ -31,12 +31,11 @@ def get_session_names() -> list[str]:
     return [os.path.splitext(os.path.basename(file))[0] for file in session_names]
 
 
-async def get_tg_clients() -> list[list[TelegramClient, str]]:
+async def get_tg_clients() -> list[TelegramClient]:
     API_ID = settings.API_ID
     API_HASH = settings.API_HASH
 
-    accounts_config_path = 'bot/config/accounts_config.json'
-    accounts_config = config_utils.read_or_create_config_file(accounts_config_path)
+    accounts_config = config_utils.read_config_file()
     session_names = get_session_names()
 
     if not session_names:
@@ -58,7 +57,7 @@ async def get_tg_clients() -> list[list[TelegramClient, str]]:
                 if key in config and config[key]:
                     client_params[key] = config[key]
 
-            tg_clients.append([TelegramClient(**client_params), config.get('proxy', None)])
+            tg_clients.append(TelegramClient(**client_params))
         else:
             unused_proxies = proxy_utils.get_unused_proxies(accounts_config)
 
@@ -68,11 +67,11 @@ async def get_tg_clients() -> list[list[TelegramClient, str]]:
                 print(f'No proxy found for session: {session_name}. Skipping')
                 continue
 
-            tg_clients.append([TelegramClient(
+            tg_clients.append(TelegramClient(
                 session=f"sessions/{session_name}",
                 api_id=API_ID,
                 api_hash=API_HASH,
-            ), proxy])
+            ))
             accounts_config.update({
                 session_name:
                     {
@@ -81,7 +80,7 @@ async def get_tg_clients() -> list[list[TelegramClient, str]]:
                         'proxy': proxy
                     }
             })
-            config_utils.write_config_file(accounts_config_path, accounts_config)
+            config_utils.write_config_file(accounts_config)
     return tg_clients
 
 
@@ -120,11 +119,10 @@ async def run_tasks():
     tasks = [
         asyncio.create_task(
             run_tapper(
-                tg_client=tg_client,
-                proxy=proxy,
+                tg_client=tg_client
             )
         )
-        for tg_client, proxy in tg_clients
+        for tg_client in tg_clients
     ]
 
     await asyncio.gather(*tasks)

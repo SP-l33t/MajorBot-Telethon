@@ -36,7 +36,6 @@
 | **REF_ID**           |               Your referral id after startapp= (Your telegram ID)                |
 | **USE_RANDOM_DELAY_IN_RUN**  |            Whether to use random delay at startup (**True** / False)             |
 | **RANDOM_DELAY_IN_RUN**      |                      Random delay at startup (e.g. [0, 15])                      |
-| **FAKE_USER AGENT** |              Use a fake user agent for sessions (**True** / False)               |
 | **SLEEP_TIME**          |                  Delay before the next lap (e.g. [1800, 3600])                   |
 | **USE_PROXY_FROM_FILE** | Whether to use a proxy from the `bot/config/proxies.txt` file (True / **False**) |
 
