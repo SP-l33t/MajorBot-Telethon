@@ -98,11 +98,14 @@ class Tapper:
             return ref_id, tg_web_data
 
         except InvalidSession as error:
-            raise error
+            logger.error(f"{self.session_name} | Invalid session")
+            await asyncio.sleep(delay=3)
+            return None, None
 
         except Exception as error:
             logger.error(f"{self.session_name} | Unknown error: {error}")
             await asyncio.sleep(delay=3)
+            return None, None
 
     # TODO возможно нужен фикс
     async def join_and_mute_tg_channel(self, link: str):
@@ -221,17 +224,17 @@ class Tapper:
     @error_handler
     async def puvel_puzzle(self, http_client):
 
-        start = await self.make_request(http_client, 'GET', endpoint="/durov/")
-        if start and start.get('success', False):
-            logger.info(f"{self.session_name} | Start game <y>Puzzle</y>")
-            async with aiohttp.ClientSession() as session:
-                async with session.get(
-                        "https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py") as response:
-                    status = response.status
-                    if status == 200:
-                        response_answer = json.loads(await response.text())
-                        if response_answer.get('expires', 0) > int(time.time()):
-                            answer = response_answer.get('answer')
+        async with aiohttp.ClientSession() as session:
+            async with session.get("https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py") as response:
+                status = response.status
+                if status == 200:
+                    response_answer = json.loads(await response.text())
+                    if response_answer.get('expires', 0) > int(time.time()):
+                        answer = response_answer.get('answer')
+                        start = await self.make_request(http_client, 'GET', endpoint="/durov/")
+                        if start and start.get('success', False):
+                            logger.info(f"{self.session_name} | Start game <y>Puzzle</y>")
+                            await asyncio.sleep(3)
                             return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
         return None
 
@@ -262,6 +265,7 @@ class Tapper:
             if proxy_conn:
                 if not proxy_conn.closed:
                     proxy_conn.close()
+            return
 
         if self.proxy:
             p_type = proxy_conn._proxy_type
