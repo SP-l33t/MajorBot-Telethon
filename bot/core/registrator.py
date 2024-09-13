@@ -46,15 +46,14 @@ async def register_sessions() -> None:
 
     if settings.USE_PROXY_FROM_FILE:
         proxies = proxy_utils.get_unused_proxies(accounts_config)
-        if proxies:
-            for prox in proxies:
-                if proxy_utils.check_proxy(prox):
-                    proxy_str = prox
-                    proxy = proxy_utils.to_telethon_proxy(Proxy.from_str(proxy_str))
-                    accounts_data['proxy'] = proxy_str
-                    break
-        else:
-            raise Exception('No unused proxies left')
+        for prox in proxies:
+            if await proxy_utils.check_proxy(prox):
+                proxy_str = prox
+                proxy = proxy_utils.to_telethon_proxy(Proxy.from_str(proxy_str))
+                accounts_data['proxy'] = proxy_str
+                break
+            else:
+                raise Exception('No unused proxies left')
     else:
         proxy = None
         accounts_data['proxy'] = None
