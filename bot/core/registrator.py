@@ -11,7 +11,7 @@ async def register_sessions() -> None:
     if not API_ID or not API_HASH:
         raise ValueError("API_ID and API_HASH not found in the .env file.")
 
-    session_name = input('\nEnter the session name (press Enter to exit): ').strip() + ".session"
+    session_name = input('\nEnter the session name (press Enter to exit): ').strip()
     if not session_name:
         return None
 
@@ -35,12 +35,9 @@ async def register_sessions() -> None:
 
     accounts_config = config_utils.read_config_file()
     accounts_data = {
-        f'{session_name}':
-            {
-                'api_id': API_ID,
-                'api_hash': API_HASH,
-                **device_params
-            }
+        'api_id': API_ID,
+        'api_hash': API_HASH,
+        **device_params
     }
     proxy = None
 
@@ -55,21 +52,18 @@ async def register_sessions() -> None:
             else:
                 raise Exception('No unused proxies left')
     else:
-        proxy = None
         accounts_data['proxy'] = None
 
     accounts_config[session_name] = accounts_data
-
     session = TelegramClient(
         f"sessions/{session_file}",
         api_id=API_ID,
         api_hash=API_HASH,
         lang_code="en",
         system_lang_code="en-US",
-        proxy=proxy,
         **device_params
     )
-
+    session.set_proxy(proxy)
     await session.start()
 
     user_data = await session.get_me()
