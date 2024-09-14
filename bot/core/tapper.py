@@ -55,7 +55,7 @@ class Tapper:
 
         return user_agent
 
-    async def get_tg_web_data(self) -> tuple[str, str]:
+    async def get_tg_web_data(self) -> tuple[str | None, str | None]:
 
         if self.proxy:
             proxy = Proxy.from_str(self.proxy)
@@ -224,8 +224,8 @@ class Tapper:
         return detail.get('rating') if detail else 0
 
     @error_handler
-    async def join_squad(self, http_client):
-        return await self.make_request(http_client, 'POST', endpoint="/squads/2237841784/join/?")
+    async def join_squad(self, http_client, squad_id):
+        return await self.make_request(http_client, 'POST', endpoint=f"/squads/{squad_id}/join/?")
 
     @error_handler
     async def get_squad(self, http_client, squad_id):
@@ -258,7 +258,7 @@ class Tapper:
             logger.error(f"<light-yellow>{self.session_name}</light-yellow> | Proxy: {proxy} | Error: {error}")
             return False
 
-    # @error_handler
+    @error_handler
     async def run(self) -> None:
         if settings.USE_RANDOM_DELAY_IN_RUN:
             random_delay = random.randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
@@ -288,12 +288,6 @@ class Tapper:
 
         while True:
             try:
-                if http_client.closed:
-                    if proxy_conn and not proxy_conn.closed:
-                        proxy_conn.close()
-
-                    proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
-                    http_client = aiohttp.ClientSession(headers=self.headers, connector=proxy_conn)
 
                 user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
                 if not user_data:
@@ -309,15 +303,14 @@ class Tapper:
                 rating = await self.get_detail(http_client=http_client)
                 logger.info(f"{self.session_name} | ID: <y>{user.get('id')}</y> | Points : <y>{rating}</y>")
 
-                if squad_id is None and settings.SUBSCRIBE_HIDDEN_CODE:
-                    await self.join_squad(http_client=http_client)
-                    squad_id = "2237841784"
+                if not squad_id and settings.SUBSCRIBE_SQUAD:
+                    await self.join_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
                     await asyncio.sleep(1)
 
-                data_squad = await self.get_squad(http_client=http_client, squad_id=squad_id)
-                if data_squad:
-                    logger.info(
-                        f"{self.session_name} | Squad : <y>{data_squad.get('name')}</y> | Member : <y>{data_squad.get('members_count')}</y> | Ratings : <y>{data_squad.get('rating')}</y>")
+                    data_squad = await self.get_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
+                    if data_squad:
+                        logger.info(f"{self.session_name} | Squad : <y>{data_squad.get('name')}</y> | Member : "
+                                    f"<y>{data_squad.get('members_count')}</y> | Ratings : <y>{data_squad.get('rating')}</y>")
 
                 data_visit = await self.visit(http_client=http_client)
                 if data_visit:

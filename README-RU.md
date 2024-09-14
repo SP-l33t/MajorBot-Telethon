@@ -32,7 +32,7 @@
 | **TASKS_WITH_JOIN_CHANNEL** |                  Выполнять ли задания с присоединением к каналам (True / False)                   |
 |        **HOLD_COIN**        |                          Количество монет в Hold Coin (напр. [585, 600])                          |
 |       **SWIPE_COIN**        |                        Количество монет в Swipe Coin (напр. [2000, 3000])                         |
-|  **SUBSCRIBE_HIDDEN_CODE**  |                        Подписаться на HIDDEN CODE Squad (**True** / False)                        |
+|     **SUBSCRIBE_SQUAD**     |                           Подписаться на Squadо ID (пример: 2212658999)                           |
 |         **REF_ID**          |              Ваш идентификатор реферала после startapp= (Ваш идентификатор telegram)              |
 | **USE_RANDOM_DELAY_IN_RUN** |                   Использовать ли рандомную задержку при запуске (True / False)                   |
 |   **RANDOM_DELAY_IN_RUN**   |                          Рандомная задержка при запуске (напр. [0, 15])                           |

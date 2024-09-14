@@ -169,3 +169,5 @@ user_agents.json
 *.json
 
 proxies.txt
+
+logs/

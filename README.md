@@ -32,7 +32,7 @@
 | **TASKS_WITH_JOIN_CHANNEL** |             Whether to perform tasks with joining channels (**True** / False)              |
 |        **HOLD_COIN**        |                        Ammount coins in Hold Coin (e.g. [585, 600])                        |
 |       **SWIPE_COIN**        |                      Ammount coins in Swipe Coin (e.g. [2000, 3000])                       |
-|  **SUBSCRIBE_HIDDEN_CODE**  |                     Subscribe to Hidden Code Squad (**True** / False)                      |
+|     **SUBSCRIBE_SQUAD**     |                 Subscribe to Squad by ID (id: 2212658999 (just an example)                 |
 |         **REF_ID**          |                    Your referral id after startapp= (Your telegram ID)                     |
 | **USE_RANDOM_DELAY_IN_RUN** |                 Whether to use random delay at startup (**True** / False)                  |
 |   **RANDOM_DELAY_IN_RUN**   |                           Random delay at startup (e.g. [0, 15])                           |
