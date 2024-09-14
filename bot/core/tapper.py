@@ -121,15 +121,15 @@ class Tapper:
             return None, None
 
     async def join_and_mute_tg_channel(self, link: str):
-        link = link if 'https://t.me/+' in link else link[13:]
-        if link == 'money':
+        path = link.replace("https://t.me/", "")
+        if path == 'money':
             return
 
         async with self.tg_client as client:
 
-            if 'https://t.me/+' in link:
+            if path.startswith('+'):
                 try:
-                    invite_hash = link.split('/+')[-1]
+                    invite_hash = path[1:]
                     result = await client(messages.ImportChatInviteRequest(hash=invite_hash))
                     logger.info(f"{self.session_name} | Joined to channel: <y>{result.chats[0].title}</y>")
                     await asyncio.sleep(random.uniform(10, 20))
@@ -138,12 +138,10 @@ class Tapper:
                     logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
             else:
                 try:
-                    await client(channels.JoinChannelRequest(channel='@'+link))
+                    await client(channels.JoinChannelRequest(channel=f'@{path}'))
                     logger.info(f"{self.session_name} | Joined to channel: <y>{link}</y>")
                 except Exception as e:
                     logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
-
-
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
@@ -278,6 +276,7 @@ class Tapper:
                 return
         else:
             http_client = CloudflareScraper(headers=self.headers)
+
         ref_id, init_data = await self.get_tg_web_data()
 
         if not init_data:
