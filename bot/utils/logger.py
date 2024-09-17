@@ -1,10 +1,10 @@
 import sys
 from loguru import logger
-from bot.config.config import settings
+from bot.config import settings
 from datetime import date
 
-
 logger.remove()
+
 logger.add(sink=sys.stdout, format="<white>{time:YYYY-MM-DD HH:mm:ss}</white>"
                                    " | <level>{level}</level>"
                                    " | <white><b>{message}</b></white>",
@@ -21,7 +21,7 @@ if settings.DEBUG_LOGGING:
 logger = logger.opt(colors=True)
 
 
-def error(text):
+def log_error(text):
     if settings.DEBUG_LOGGING:
         logger.opt(exception=True, colors=True).trace(text)
     return logger.error(text)

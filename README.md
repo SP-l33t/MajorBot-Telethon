@@ -26,20 +26,21 @@
 
 
 ## [Settings](https://github.com/GravelFire/MajorBot/blob/main/.env-example/)
-|          Settings           |                                        Description                                         |
-|:---------------------------:|:------------------------------------------------------------------------------------------:|
-|    **API_ID / API_HASH**    |          Platform data from which to run the Telegram session (default - android)          |
-| **TASKS_WITH_JOIN_CHANNEL** |             Whether to perform tasks with joining channels (**True** / False)              |
-|        **HOLD_COIN**        |                        Ammount coins in Hold Coin (e.g. [585, 600])                        |
-|       **SWIPE_COIN**        |                      Ammount coins in Swipe Coin (e.g. [2000, 3000])                       |
-|     **SUBSCRIBE_SQUAD**     |                 Subscribe to Squad by ID (id: 2212658999 (just an example)                 |
-|         **REF_ID**          |                    Your referral id after startapp= (Your telegram ID)                     |
-| **USE_RANDOM_DELAY_IN_RUN** |                 Whether to use random delay at startup (**True** / False)                  |
-|   **RANDOM_DELAY_IN_RUN**   |                           Random delay at startup (e.g. [0, 15])                           |
-|       **SLEEP_TIME**        |                       Delay before the next lap (e.g. [1800, 3600])                        |
-|   **USE_PROXY_FROM_FILE**   |      Whether to use a proxy from the `bot/config/proxies.txt` file (True / **False**)      |
-|      **DEVICE_PARAMS**      | Enter device settings to make the telegram session look more realistic  (True / **False**) |
-|      **DEBUG_LOGGING**      |            Whether to log error's tracebacks to /logs folder (True / **False**)            |
+|          Settings           |                                                                                                                  Description                                                                                                                  |
+|:---------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
+|    **API_ID / API_HASH**    |                                                                                   Platform data from which to run the Telegram session (default - android)                                                                                    |
+|   **GLOBAL_CONFIG_PATH**    | Specifies the global path for accounts_config, proxies, sessions. <br/>Specify an absolute path or use an environment variable (default environment variable: **TG_FARM**) <br/>If no environment variable exists, uses the script directory. |
+| **TASKS_WITH_JOIN_CHANNEL** |                                                                                       Whether to perform tasks with joining channels (**True** / False)                                                                                       |
+|        **HOLD_COIN**        |                                                                                                 Ammount coins in Hold Coin (e.g. [585, 600])                                                                                                  |
+|       **SWIPE_COIN**        |                                                                                                Ammount coins in Swipe Coin (e.g. [2000, 3000])                                                                                                |
+|     **SUBSCRIBE_SQUAD**     |                                                                                          Subscribe to Squad by ID (id: 2212658999 (just an example)                                                                                           |
+|         **REF_ID**          |                                                                                              Your referral id after startapp= (Your telegram ID)                                                                                              |
+| **USE_RANDOM_DELAY_IN_RUN** |                                                                                           Whether to use random delay at startup (**True** / False)                                                                                           |
+|   **RANDOM_DELAY_IN_RUN**   |                                                                                                    Random delay at startup (e.g. [0, 15])                                                                                                     |
+|       **SLEEP_TIME**        |                                                                                                 Delay before the next lap (e.g. [1800, 3600])                                                                                                 |
+|   **USE_PROXY_FROM_FILE**   |                                                                               Whether to use a proxy from the `bot/config/proxies.txt` file (True / **False**)                                                                                |
+|      **DEVICE_PARAMS**      |                                                                          Enter device settings to make the telegram session look more realistic  (True / **False**)                                                                           |
+|      **DEBUG_LOGGING**      |                                                                                     Whether to log error's tracebacks to /logs folder (True / **False**)                                                                                      |
 
 ## Quick Start 📚
 

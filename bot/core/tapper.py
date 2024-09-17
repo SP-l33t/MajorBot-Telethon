@@ -18,7 +18,7 @@ from telethon.functions import messages, contacts, channels
 from .agents import generate_random_user_agent
 from bot.config import settings
 from typing import Callable
-from bot.utils import logger, proxy_utils, config_utils
+from bot.utils import logger, log_error, proxy_utils, config_utils, CONFIG_PATH
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -38,7 +38,7 @@ class Tapper:
     def __init__(self, tg_client: TelegramClient):
         self.tg_client = tg_client
         self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
-        self.config = config_utils.get_session_config(self.session_name)
+        self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
         self.proxy = self.config.get('proxy', None)
         self.tg_web_data = None
         self.tg_client_id = 0
@@ -46,12 +46,15 @@ class Tapper:
         self.headers['User-Agent'] = self.check_user_agent()
         self.headers.update(**get_sec_ch_ua(self.headers.get('User-Agent', '')))
 
+    def log_message(self, message) -> str:
+        return f"<light-yellow>{self.session_name}</light-yellow> | {message}"
+
     def check_user_agent(self):
         user_agent = self.config.get('user_agent')
         if not user_agent:
             user_agent = generate_random_user_agent()
             self.config['user_agent'] = user_agent
-            config_utils.update_config_file(self.session_name, self.config)
+            config_utils.update_config_file(self.session_name, self.config, CONFIG_PATH)
 
         return user_agent
 
@@ -82,8 +85,8 @@ class Tapper:
                 except FloodWaitError as fl:
                     fls = fl.seconds
 
-                    logger.warning(f"{self.session_name} | FloodWait {fl}")
-                    logger.info(f"{self.session_name} | Sleep {fls}s")
+                    logger.warning(self.log_message(f"FloodWait {fl}"))
+                    logger.info(self.log_message(f"Sleep {fls}s"))
                     await asyncio.sleep(fls + 3)
 
             ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "525256526"
@@ -111,12 +114,12 @@ class Tapper:
             return ref_id, tg_web_data
 
         except InvalidSession as error:
-            logger.error(f"{self.session_name} | Invalid session")
+            log_error(self.log_message("Invalid session"))
             await asyncio.sleep(delay=3)
             return None, None
 
         except Exception as error:
-            logger.error(f"{self.session_name} | Unknown error: {error}")
+            log_error(self.log_message(f"Unknown error: {error}"))
             await asyncio.sleep(delay=3)
             return None, None
 
@@ -131,17 +134,17 @@ class Tapper:
                 try:
                     invite_hash = path[1:]
                     result = await client(messages.ImportChatInviteRequest(hash=invite_hash))
-                    logger.info(f"{self.session_name} | Joined to channel: <y>{result.chats[0].title}</y>")
+                    logger.info(self.log_message(f"Joined to channel: <y>{result.chats[0].title}</y>"))
                     await asyncio.sleep(random.uniform(10, 20))
 
                 except Exception as e:
-                    logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
+                    log_error(self.log_message(f"(Task) Error while join tg channel: {e}"))
             else:
                 try:
                     await client(channels.JoinChannelRequest(channel=f'@{path}'))
-                    logger.info(f"{self.session_name} | Joined to channel: <y>{link}</y>")
+                    logger.info(self.log_message(f"Joined to channel: <y>{link}</y>"))
                 except Exception as e:
-                    logger.error(f"{self.session_name} | (Task) Error while join tg channel: {e}")
+                    log_error(self.log_message(f"(Task) Error while join tg channel: {e}"))
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
@@ -173,7 +176,7 @@ class Tapper:
     async def claim_swipe_coins(self, http_client):
         response = await self.make_request(http_client, 'GET', endpoint="/swipe_coin/")
         if response and response.get('success') is True:
-            logger.info(f"{self.session_name} | Start game <y>SwipeCoins</y>")
+            logger.info(self.log_message("Start game <y>SwipeCoins</y>"))
             coins = random.randint(settings.SWIPE_COIN[0], settings.SWIPE_COIN[1])
             payload = {"coins": coins}
             await asyncio.sleep(55)
@@ -187,7 +190,7 @@ class Tapper:
     async def claim_hold_coins(self, http_client):
         response = await self.make_request(http_client, 'GET', endpoint="/bonuses/coins/")
         if response and response.get('success') is True:
-            logger.info(f"{self.session_name} | Start game <y>HoldCoins</y>")
+            logger.info(self.log_message("Start game <y>HoldCoins</y>"))
             coins = random.randint(settings.HOLD_COIN[0], settings.HOLD_COIN[1])
             payload = {"coins": coins}
             await asyncio.sleep(55)
@@ -201,7 +204,7 @@ class Tapper:
     async def claim_roulette(self, http_client):
         response = await self.make_request(http_client, 'GET', endpoint="/roulette/")
         if response and response.get('success') is True:
-            logger.info(f"{self.session_name} | Start game <y>Roulette</y>")
+            logger.info(self.log_message(f"Start game <y>Roulette</y>"))
             await asyncio.sleep(10)
             response = await self.make_request(http_client, 'POST', endpoint="/roulette/")
             if response:
@@ -243,7 +246,7 @@ class Tapper:
                         answer = response_answer.get('answer')
                         start = await self.make_request(http_client, 'GET', endpoint="/durov/")
                         if start and start.get('success', False):
-                            logger.info(f"{self.session_name} | Start game <y>Puzzle</y>")
+                            logger.info(self.log_message("Start game <y>Puzzle</y>"))
                             await asyncio.sleep(3)
                             return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
         return None
@@ -252,17 +255,17 @@ class Tapper:
         try:
             response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
             ip = (await response.json()).get('origin')
-            logger.info(f"<light-yellow>{self.session_name}</light-yellow> | Proxy IP: {ip}")
+            logger.info(self.log_message(f"Proxy IP: {ip}"))
             return True
         except Exception as error:
-            logger.error(f"<light-yellow>{self.session_name}</light-yellow> | Proxy: {proxy} | Error: {error}")
+            log_error(self.log_message(f"Proxy: {proxy} | Error: {error}"))
             return False
 
     @error_handler
     async def run(self) -> None:
         if settings.USE_RANDOM_DELAY_IN_RUN:
             random_delay = random.randint(settings.RANDOM_DELAY_IN_RUN[0], settings.RANDOM_DELAY_IN_RUN[1])
-            logger.info(f"{self.session_name} | Bot will start in <y>{random_delay}s</y>")
+            logger.info(self.log_message(f"Bot will start in <y>{random_delay}s</y>"))
             await asyncio.sleep(random_delay)
 
         proxy_conn = None
@@ -288,20 +291,26 @@ class Tapper:
 
         while True:
             try:
+                if http_client.closed:
+                    if proxy_conn and not proxy_conn.closed:
+                        proxy_conn.close()
+
+                    proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
+                    http_client = aiohttp.ClientSession(headers=self.headers, connector=proxy_conn)
 
                 user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
                 if not user_data:
-                    logger.info(f"{self.session_name} | <r>Failed login</r>")
+                    logger.info(self.log_message(f"<r>Failed login</r>"))
                     sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
-                    logger.info(f"{self.session_name} | Sleep <y>{sleep_time}s</y>")
+                    logger.info(self.log_message(f"Sleep <y>{sleep_time}s</y>"))
                     await asyncio.sleep(delay=sleep_time)
                     continue
                 http_client.headers['Authorization'] = "Bearer " + user_data.get("access_token")
-                logger.info(f"{self.session_name} | <y>⭐ Login successful</y>")
+                logger.info(self.log_message(f"<y>⭐ Login successful</y>"))
                 user = user_data.get('user')
                 squad_id = user.get('squad_id')
                 rating = await self.get_detail(http_client=http_client)
-                logger.info(f"{self.session_name} | ID: <y>{user.get('id')}</y> | Points : <y>{rating}</y>")
+                logger.info(self.log_message(f"ID: <y>{user.get('id')}</y> | Points : <y>{rating}</y>"))
 
                 if not squad_id and settings.SUBSCRIBE_SQUAD:
                     await self.join_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
@@ -309,38 +318,39 @@ class Tapper:
 
                     data_squad = await self.get_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
                     if data_squad:
-                        logger.info(f"{self.session_name} | Squad : <y>{data_squad.get('name')}</y> | Member : "
-                                    f"<y>{data_squad.get('members_count')}</y> | Ratings : <y>{data_squad.get('rating')}</y>")
+                        logger.info(self.log_message(f"Squad : <y>{data_squad.get('name')}</y> | "
+                                                     f"Member : <y>{data_squad.get('members_count')}</y> | "
+                                                     f"Ratings : <y>{data_squad.get('rating')}</y>"))
 
                 data_visit = await self.visit(http_client=http_client)
                 if data_visit:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Daily Streak : <y>{data_visit.get('streak')}</y>")
+                    logger.info(self.log_message(f"Daily Streak : <y>{data_visit.get('streak')}</y>"))
 
                 await self.streak(http_client=http_client)
 
                 hold_coins = await self.claim_hold_coins(http_client=http_client)
                 if hold_coins:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward HoldCoins: <y>+{hold_coins}⭐</y>")
+                    logger.info(self.log_message(f"Reward HoldCoins: <y>+{hold_coins}⭐</y>"))
                 await asyncio.sleep(10)
 
                 swipe_coins = await self.claim_swipe_coins(http_client=http_client)
                 if swipe_coins:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward SwipeCoins: <y>+{swipe_coins}⭐</y>")
+                    logger.info(self.log_message(f"Reward SwipeCoins: <y>+{swipe_coins}⭐</y>"))
                 await asyncio.sleep(10)
 
                 roulette = await self.claim_roulette(http_client=http_client)
                 if roulette:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward Roulette : <y>+{roulette}⭐</y>")
+                    logger.info(self.log_message(f"Reward Roulette : <y>+{roulette}⭐</y>"))
                 await asyncio.sleep(10)
 
                 puzzle = await self.puvel_puzzle(http_client=http_client)
                 if puzzle:
                     await asyncio.sleep(1)
-                    logger.info(f"{self.session_name} | Reward Puzzle Pavel: <y>+5000⭐</y>")
+                    logger.info(self.log_message(f"Reward Puzzle Pavel: <y>+5000⭐</y>"))
                 await asyncio.sleep(10)
 
                 data_daily = await self.get_daily(http_client=http_client)
@@ -353,8 +363,8 @@ class Tapper:
                         data_done = await self.done_tasks(http_client=http_client, task_id=id)
                         if data_done and data_done.get('is_completed') is True:
                             await asyncio.sleep(1)
-                            logger.info(
-                                f"{self.session_name} | Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>")
+                            logger.info(self.log_message(
+                                f"Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>"))
 
                 data_task = await self.get_tasks(http_client=http_client)
                 if data_task:
@@ -371,8 +381,8 @@ class Tapper:
                         if data_done and data_done.get('is_completed') is True:
                             await asyncio.sleep(1)
 
-                            logger.info(
-                                f"{self.session_name} | Task : <y>{task.get('title')}</y> | Reward : <y>{task.get('award')}</y>")
+                            logger.info(self.log_message(
+                                f"Task : <y>{task.get('title')}</y> | Reward : <y>{task.get('award')}</y>"))
                 await http_client.close()
                 if proxy_conn:
                     if not proxy_conn.closed:
@@ -382,11 +392,11 @@ class Tapper:
                 raise error
 
             except Exception as error:
-                logger.error(f"{self.session_name} | Unknown error: {error}")
+                log_error(self.log_message(f"Unknown error: {error}"))
                 await asyncio.sleep(delay=3)
 
             sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
-            logger.info(f"{self.session_name} | Sleep <y>{sleep_time}s</y>")
+            logger.info(self.log_message(f"Sleep <y>{sleep_time}s</y>"))
             await asyncio.sleep(delay=sleep_time)
 
 
