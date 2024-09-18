@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+import fasteners
 import functools
 import json
 import os
@@ -18,7 +19,7 @@ from telethon.functions import messages, contacts, channels
 from .agents import generate_random_user_agent
 from bot.config import settings
 from typing import Callable
-from bot.utils import logger, log_error, proxy_utils, config_utils, CONFIG_PATH
+from bot.utils import logger, log_error, proxy_utils, config_utils, CONFIG_PATH, SESSIONS_PATH
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -40,6 +41,7 @@ class Tapper:
         self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
         self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
         self.proxy = self.config.get('proxy', None)
+        self.lock = fasteners.InterProcessLock(os.path.join(SESSIONS_PATH, f"{self.session_name}.lock"))
         self.tg_web_data = None
         self.tg_client_id = 0
         self.headers = headers
@@ -70,6 +72,7 @@ class Tapper:
         try:
             if not self.tg_client.is_connected():
                 try:
+                    self.lock.acquire()
                     await self.tg_client.start()
                 except (UnauthorizedError, AuthKeyUnregisteredError):
                     raise InvalidSession(self.session_name)
@@ -110,6 +113,7 @@ class Tapper:
 
             if self.tg_client.is_connected():
                 await self.tg_client.disconnect()
+                self.lock.release()
 
             return ref_id, tg_web_data
 
@@ -127,6 +131,7 @@ class Tapper:
         path = link.replace("https://t.me/", "")
         if path == 'money':
             return
+        self.lock.acquire()
 
         async with self.tg_client as client:
 
@@ -145,6 +150,8 @@ class Tapper:
                     logger.info(self.log_message(f"Joined to channel: <y>{link}</y>"))
                 except Exception as e:
                     log_error(self.log_message(f"(Task) Error while join tg channel: {e}"))
+
+        self.lock.release()
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
