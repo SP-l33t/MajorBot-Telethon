@@ -91,7 +91,7 @@ class Tapper:
                 input_user = InputUser(user_id=resolve_result.peer.user_id, access_hash=resolve_result.users[0].access_hash)
                 input_bot_app = InputBotAppShortName(bot_id=input_user, short_name="start")
 
-                web_view = await self.tg_client(messages.RequestAppWebViewRequest(
+                web_view = await client(messages.RequestAppWebViewRequest(
                     peer=peer,
                     app=input_bot_app,
                     platform='android',
@@ -102,7 +102,7 @@ class Tapper:
                 auth_url = web_view.url
                 tg_web_data = unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
 
-                me = await self.tg_client.get_me()
+                me = await client.get_me()
                 self.tg_client_id = me.id
                 init_data = ref_id, tg_web_data
 
