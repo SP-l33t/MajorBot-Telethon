@@ -21,7 +21,6 @@ def get_sec_ch_ua(user_agent):
 
 
 headers = {
-    'Host': 'major.bot',
     'Cache-Control': 'no-cache',
     'Accept': 'application/json, text/plain, */*',
     'Content-Type': 'application/json',

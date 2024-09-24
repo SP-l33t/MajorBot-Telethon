@@ -11,6 +11,7 @@ from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from datetime import timedelta, datetime
 from better_proxy import Proxy
+from time import time
 
 from telethon import TelegramClient
 from telethon.errors import *
@@ -248,14 +249,15 @@ class Tapper:
                             return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
         return None
 
-    async def check_proxy(self, http_client: aiohttp.ClientSession, proxy: str) -> bool:
+    async def check_proxy(self, http_client: aiohttp.ClientSession) -> bool:
+        proxy_conn = http_client._connector
         try:
-            response = await http_client.get(url='https://httpbin.org/ip', timeout=aiohttp.ClientTimeout(5))
-            ip = (await response.json()).get('origin')
-            logger.info(self.log_message(f"Proxy IP: {ip}"))
+            response = await http_client.get(url='https://ifconfig.me/ip', timeout=aiohttp.ClientTimeout(15))
+            logger.info(self.log_message(f"Proxy IP: {await response.text()}"))
             return True
         except Exception as error:
-            log_error(self.log_message(f"Proxy: {proxy} | Error: {error}"))
+            proxy_url = f"{proxy_conn._proxy_type}://{proxy_conn._proxy_host}:{proxy_conn._proxy_port}"
+            log_error(self.log_message(f"Proxy: {proxy_url} | Error: {type(error).__name__}"))
             return False
 
     @error_handler
@@ -265,137 +267,125 @@ class Tapper:
             logger.info(self.log_message(f"Bot will start in <y>{random_delay}s</y>"))
             await asyncio.sleep(random_delay)
 
-        proxy_conn = None
-        if self.proxy:
-            proxy_conn = ProxyConnector().from_url(self.proxy)
-            http_client = CloudflareScraper(headers=self.headers, connector=proxy_conn)
-            p_type = proxy_conn._proxy_type
-            p_host = proxy_conn._proxy_host
-            p_port = proxy_conn._proxy_port
-            if not await self.check_proxy(http_client=http_client, proxy=f"{p_type}://{p_host}:{p_port}"):
-                return
-        else:
-            http_client = CloudflareScraper(headers=self.headers)
+        access_token_created_time = 0
+        init_data = None
+        ref_id = None
 
-        ref_id, init_data = await self.get_tg_web_data()
-
-        if not init_data:
-            if not http_client.closed:
-                await http_client.close()
-            if proxy_conn and not proxy_conn.closed:
-                proxy_conn.close()
-            return
+        token_live_time = random.randint(3500, 3600)
 
         while True:
-            try:
-                if http_client.closed:
-                    if proxy_conn and not proxy_conn.closed:
-                        proxy_conn.close()
-
-                    proxy_conn = ProxyConnector().from_url(self.proxy) if self.proxy else None
-                    http_client = aiohttp.ClientSession(headers=self.headers, connector=proxy_conn)
-
-                user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
-                if not user_data:
-                    logger.info(self.log_message(f"<r>Failed login</r>"))
-                    sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
-                    logger.info(self.log_message(f"Sleep <y>{sleep_time}s</y>"))
-                    await asyncio.sleep(delay=sleep_time)
+            proxy_conn = {'connector': ProxyConnector.from_url(self.proxy)} if self.proxy else {}
+            async with CloudflareScraper(headers=self.headers, timeout=aiohttp.ClientTimeout(60), **proxy_conn) as http_client:
+                if not await self.check_proxy(http_client=http_client):
+                    logger.warning(self.log_message('Failed to connect to proxy server. Sleep 5 minutes.'))
+                    await asyncio.sleep(300)
                     continue
-                http_client.headers['Authorization'] = "Bearer " + user_data.get("access_token")
-                logger.info(self.log_message(f"<y>⭐ Login successful</y>"))
-                user = user_data.get('user')
-                squad_id = user.get('squad_id')
-                rating = await self.get_detail(http_client=http_client)
-                logger.info(self.log_message(f"ID: <y>{user.get('id')}</y> | Points : <y>{rating}</y>"))
 
-                if not squad_id and settings.SUBSCRIBE_SQUAD:
-                    await self.join_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
-                    await asyncio.sleep(1)
+                try:
+                    if time() - access_token_created_time >= token_live_time:
+                        ref_id, init_data = await self.get_tg_web_data()
 
-                    data_squad = await self.get_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
-                    if data_squad:
-                        logger.info(self.log_message(f"Squad : <y>{data_squad.get('name')}</y> | "
-                                                     f"Member : <y>{data_squad.get('members_count')}</y> | "
-                                                     f"Ratings : <y>{data_squad.get('rating')}</y>"))
+                        if not init_data:
+                            raise InvalidSession('Failed to get webview URL')
 
-                data_visit = await self.visit(http_client=http_client)
-                if data_visit:
-                    await asyncio.sleep(1)
-                    logger.info(self.log_message(f"Daily Streak : <y>{data_visit.get('streak')}</y>"))
+                    access_token_created_time = time()
+                    sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
 
-                await self.streak(http_client=http_client)
+                    user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
+                    if not user_data:
+                        logger.warning(self.log_message(f"<r>Failed login</r>. Sleep <y>{sleep_time}s</y>"))
+                        await asyncio.sleep(delay=sleep_time)
+                        continue
 
-                hold_coins = await self.claim_hold_coins(http_client=http_client)
-                if hold_coins:
-                    await asyncio.sleep(1)
-                    logger.info(self.log_message(f"Reward HoldCoins: <y>+{hold_coins}⭐</y>"))
-                await asyncio.sleep(10)
+                    http_client.headers['Authorization'] = "Bearer " + user_data.get("access_token")
+                    logger.info(self.log_message(f"<y>⭐ Login successful</y>"))
+                    user = user_data.get('user')
+                    squad_id = user.get('squad_id')
+                    rating = await self.get_detail(http_client=http_client)
+                    logger.info(self.log_message(f"ID: <y>{user.get('id')}</y> | Points : <y>{rating}</y>"))
 
-                swipe_coins = await self.claim_swipe_coins(http_client=http_client)
-                if swipe_coins:
-                    await asyncio.sleep(1)
-                    logger.info(self.log_message(f"Reward SwipeCoins: <y>+{swipe_coins}⭐</y>"))
-                await asyncio.sleep(10)
+                    if not squad_id and settings.SUBSCRIBE_SQUAD:
+                        await self.join_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
+                        await asyncio.sleep(1)
 
-                roulette = await self.claim_roulette(http_client=http_client)
-                if roulette:
-                    await asyncio.sleep(1)
-                    logger.info(self.log_message(f"Reward Roulette : <y>+{roulette}⭐</y>"))
-                await asyncio.sleep(10)
+                        data_squad = await self.get_squad(http_client=http_client, squad_id=settings.SUBSCRIBE_SQUAD)
+                        if data_squad:
+                            logger.info(self.log_message(f"Squad : <y>{data_squad.get('name')}</y> | "
+                                                         f"Member : <y>{data_squad.get('members_count')}</y> | "
+                                                         f"Ratings : <y>{data_squad.get('rating')}</y>"))
 
-                puzzle = await self.puvel_puzzle(http_client=http_client)
-                if puzzle:
-                    await asyncio.sleep(1)
-                    logger.info(self.log_message(f"Reward Puzzle Pavel: <y>+5000⭐</y>"))
-                await asyncio.sleep(10)
+                    data_visit = await self.visit(http_client=http_client)
+                    if data_visit:
+                        await asyncio.sleep(1)
+                        logger.info(self.log_message(f"Daily Streak : <y>{data_visit.get('streak')}</y>"))
 
-                data_daily = await self.get_daily(http_client=http_client)
-                if data_daily:
-                    for daily in reversed(data_daily):
-                        await asyncio.sleep(10)
-                        id = daily.get('id')
-                        title = daily.get('title')
-                        # if title not in ["Donate rating", "Boost Major channel", "TON Transaction"]:
-                        data_done = await self.done_tasks(http_client=http_client, task_id=id)
-                        if data_done and data_done.get('is_completed') is True:
-                            await asyncio.sleep(1)
-                            logger.info(self.log_message(
-                                f"Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>"))
+                    await self.streak(http_client=http_client)
 
-                data_task = await self.get_tasks(http_client=http_client)
-                if data_task:
-                    for task in data_task:
-                        await asyncio.sleep(10)
-                        id = task.get('id')
-                        if task.get('type') == 'subscribe_channel' or \
-                                re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', "")):
-                            if not settings.TASKS_WITH_JOIN_CHANNEL:
-                                continue
-                            await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
-                            await asyncio.sleep(random.uniform(10, 20))
+                    hold_coins = await self.claim_hold_coins(http_client=http_client)
+                    if hold_coins:
+                        await asyncio.sleep(1)
+                        logger.info(self.log_message(f"Reward HoldCoins: <y>+{hold_coins}⭐</y>"))
+                    await asyncio.sleep(10)
 
-                        data_done = await self.done_tasks(http_client=http_client, task_id=id)
-                        if data_done and data_done.get('is_completed') is True:
-                            await asyncio.sleep(1)
+                    swipe_coins = await self.claim_swipe_coins(http_client=http_client)
+                    if swipe_coins:
+                        await asyncio.sleep(1)
+                        logger.info(self.log_message(f"Reward SwipeCoins: <y>+{swipe_coins}⭐</y>"))
+                    await asyncio.sleep(10)
 
-                            logger.info(self.log_message(
-                                f"Task : <y>{task.get('title')}</y> | Reward : <y>{task.get('award')}</y>"))
-                await http_client.close()
-                if proxy_conn:
-                    if not proxy_conn.closed:
-                        proxy_conn.close()
+                    roulette = await self.claim_roulette(http_client=http_client)
+                    if roulette:
+                        await asyncio.sleep(1)
+                        logger.info(self.log_message(f"Reward Roulette : <y>+{roulette}⭐</y>"))
+                    await asyncio.sleep(10)
 
-            except InvalidSession as error:
-                raise error
+                    puzzle = await self.puvel_puzzle(http_client=http_client)
+                    if puzzle:
+                        await asyncio.sleep(1)
+                        logger.info(self.log_message(f"Reward Puzzle Pavel: <y>+5000⭐</y>"))
+                    await asyncio.sleep(10)
 
-            except Exception as error:
-                log_error(self.log_message(f"Unknown error: {error}"))
-                await asyncio.sleep(delay=3)
+                    data_daily = await self.get_daily(http_client=http_client)
+                    if data_daily:
+                        for daily in reversed(data_daily):
+                            await asyncio.sleep(10)
+                            id = daily.get('id')
+                            title = daily.get('title')
+                            # if title not in ["Donate rating", "Boost Major channel", "TON Transaction"]:
+                            data_done = await self.done_tasks(http_client=http_client, task_id=id)
+                            if data_done and data_done.get('is_completed') is True:
+                                await asyncio.sleep(1)
+                                logger.info(self.log_message(
+                                    f"Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>"))
 
-            sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
-            logger.info(self.log_message(f"Sleep <y>{sleep_time}s</y>"))
-            await asyncio.sleep(delay=sleep_time)
+                    data_task = await self.get_tasks(http_client=http_client)
+                    if data_task:
+                        for task in data_task:
+                            await asyncio.sleep(10)
+                            id = task.get('id')
+                            if task.get('type') == 'subscribe_channel' or \
+                                    re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', ""), re.IGNORECASE):
+                                if not settings.TASKS_WITH_JOIN_CHANNEL:
+                                    continue
+                                await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
+                                await asyncio.sleep(random.uniform(10, 20))
+
+                            data_done = await self.done_tasks(http_client=http_client, task_id=id)
+                            if data_done and data_done.get('is_completed') is True:
+                                await asyncio.sleep(1)
+
+                                logger.info(self.log_message(
+                                    f"Task : <y>{task.get('title')}</y> | Reward : <y>{task.get('award')}</y>"))
+
+                except InvalidSession as error:
+                    raise error
+
+                except Exception as error:
+                    log_error(self.log_message(f"Unknown error: {error}"))
+                    await asyncio.sleep(delay=3)
+
+                logger.info(self.log_message(f"Sleep <y>{sleep_time}s</y>"))
+                await asyncio.sleep(delay=sleep_time)
 
 
 async def run_tapper(tg_client: TelegramClient):
