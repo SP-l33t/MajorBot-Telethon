@@ -79,11 +79,8 @@ class Tapper:
                 if not self._webview_data:
                     while True:
                         try:
-                            resolve_result = await client(contacts.ResolveUsernameRequest(username='major'))
-                            user = resolve_result.users[0]
-                            peer = InputPeerUser(user_id=user.id, access_hash=user.access_hash)
-                            input_user = InputUser(user_id=user.id, access_hash=user.access_hash)
-                            input_bot_app = InputBotAppShortName(bot_id=input_user, short_name="start")
+                            peer = await client.get_input_entity('major')
+                            input_bot_app = InputBotAppShortName(bot_id=peer, short_name="start")
                             self._webview_data = {'peer': peer, 'app': input_bot_app}
                             break
                         except FloodWaitError as fl:
@@ -297,9 +294,9 @@ class Tapper:
 
         token_live_time = random.randint(3500, 3600)
 
-        while True:
-            proxy_conn = {'connector': ProxyConnector.from_url(self.proxy)} if self.proxy else {}
-            async with CloudflareScraper(headers=self.headers, timeout=aiohttp.ClientTimeout(60), **proxy_conn) as http_client:
+        proxy_conn = {'connector': ProxyConnector.from_url(self.proxy)} if self.proxy else {}
+        async with CloudflareScraper(headers=self.headers, timeout=aiohttp.ClientTimeout(60), **proxy_conn) as http_client:
+            while True:
                 if not await self.check_proxy(http_client=http_client):
                     logger.warning(self.log_message('Failed to connect to proxy server. Sleep 5 minutes.'))
                     await asyncio.sleep(300)
