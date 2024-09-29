@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     SLEEP_TIME: list[int] = [1800, 3600]
     
     SESSIONS_PER_PROXY: int = 1
-    USE_PROXY_FROM_FILE: bool = False
+    USE_PROXY_FROM_FILE: bool = True
     USE_PROXY_CHAIN: bool = False
 
     DEVICE_PARAMS: bool = False
