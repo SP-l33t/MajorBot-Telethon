@@ -9,3 +9,4 @@ pydantic-settings==2.4.0
 python-socks==2.5.1
 PySocks==1.7.1
 fasteners
+ua_generator
