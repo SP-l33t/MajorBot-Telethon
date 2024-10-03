@@ -392,11 +392,11 @@ class Tapper:
 
                     data_daily = await self.get_daily(http_client=http_client)
                     if data_daily:
-                        for daily in reversed(data_daily):
-                            await asyncio.sleep(10)
+                        random.shuffle(data_daily)
+                        for daily in data_daily:
+                            await asyncio.sleep(random.uniform(3,10))
                             id = daily.get('id')
                             title = daily.get('title')
-                            # if title not in ["Donate rating", "Boost Major channel", "TON Transaction"]:
                             data_done = await self.done_tasks(http_client=http_client, task_id=id)
                             if data_done and data_done.get('is_completed') is True:
                                 await asyncio.sleep(1)
@@ -407,7 +407,7 @@ class Tapper:
                     if data_task:
                         random.shuffle(data_task)
                         for task in data_task:
-                            await asyncio.sleep(10)
+                            await asyncio.sleep(random.uniform(3, 10))
                             id = task.get('id')
                             title = task.get("title", "")
                             if task.get("type") == "code":
