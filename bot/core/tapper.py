@@ -4,7 +4,6 @@ import functools
 import json
 import os
 import random
-import time
 from urllib.parse import unquote
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
@@ -17,7 +16,6 @@ from telethon.errors import *
 from telethon.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer, InputUser
 from telethon.functions import messages, channels, account
 
-from .agents import generate_random_user_agent
 from bot.config import settings
 from typing import Callable
 from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
@@ -43,7 +41,7 @@ class Tapper:
         self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
         self.proxy = self.config.get('proxy')
         self.lock = AsyncInterProcessLock(
-            os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files',  f"{self.session_name}.lock"))
+            os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files', f"{self.session_name}.lock"))
         self.headers = headers
 
         session_config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
@@ -256,45 +254,57 @@ class Tapper:
     async def get_squad(self, http_client, squad_id):
         return await self.make_request(http_client, 'GET', endpoint=f"/squads/{squad_id}?")
 
+    @staticmethod
+    async def get_auxiliary_data():
+        async with aiohttp.ClientSession() as session:
+            try:
+                resp = await session.get('https://raw.githubusercontent.com/SP-l33t/Auxiliary-Data/master/data.json')
+                if resp.status == 200:
+                    resp_json = json.loads(await resp.text())
+                    auxiliary_data = resp_json.get('major', {})
+                    return auxiliary_data
+                else:
+                    logger.error(f"Failed to get data.json: {resp.status}")
+                    return None
+            except aiohttp.ClientError as e:
+                logger.error(f"There was an error upon requesting data.json: {e}")
+                return None
+
     @error_handler
     async def youtube_answers(self, http_client, task_id, task_title):
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py") as response:
-                status = response.status
-                if status == 200:
-                    response_data = json.loads(await response.text())
-                    youtube_answers = response_data.get('youtube', {})
-                    if task_title in youtube_answers:
-                        answer = youtube_answers[task_title]
-                        payload = {
-                            "task_id": task_id,
-                            "payload": {
-                                "code": answer
-                            }
-                        }
-                        logger.info(f"{self.session_name} | Attempting YouTube task: <y>{task_title}</y>")
-                        response = await self.make_request(http_client, 'POST', endpoint="/tasks/", json=payload)
-                        if response and response.get('is_completed') is True:
-                            logger.info(f"{self.session_name} | Completed YouTube task: <y>{task_title}</y>")
-                            return True
+        auxiliary_data = await self.get_auxiliary_data()
+        if auxiliary_data:
+            youtube_answers = auxiliary_data.get('youtube', {})
+            if task_title in youtube_answers:
+                answer = youtube_answers[task_title]
+                payload = {
+                    "task_id": task_id,
+                    "payload": {"code": answer}
+                }
+                logger.info(f"{self.session_name} | Attempting YouTube task: <y>{task_title}</y>")
+                response = await self.make_request(http_client, 'POST', endpoint="/tasks/", json=payload)
+                if response and response.get('is_completed') is True:
+                    logger.info(f"{self.session_name} | Completed YouTube task: <y>{task_title}</y>")
+                    return True
         return False
 
-
     @error_handler
-    async def puvel_puzzle(self, http_client):
-
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://raw.githubusercontent.com/GravelFire/TWFqb3JCb3RQdXp6bGVEdXJvdg/master/answer.py") as response:
-                status = response.status
-                if status == 200:
-                    response_answer = json.loads(await response.text())
-                    if response_answer.get('expires', 0) > int(time.time()):
-                        answer = response_answer.get('answer')
-                        start = await self.make_request(http_client, 'GET', endpoint="/durov/")
-                        if start and start.get('success', False):
-                            logger.info(self.log_message("Start game <y>Puzzle</y>"))
-                            await asyncio.sleep(3)
-                            return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
+    async def puvel_puzzle(self, http_client: aiohttp.ClientSession):
+        auxiliary_data = await self.get_auxiliary_data()
+        if auxiliary_data:
+            puzzle_data = auxiliary_data.get('puzzle', {})
+            puzzle_answer = puzzle_data.get('answer', [])
+            if puzzle_data.get('expires', 0) > int(time()):
+                if len(puzzle_answer) == 4:
+                    answer = {"choice_1": puzzle_answer[0],
+                              "choice_2": puzzle_answer[1],
+                              "choice_3": puzzle_answer[2],
+                              "choice_4": puzzle_answer[3]}
+                    start = await self.make_request(http_client, 'GET', endpoint="/durov/")
+                    if start and start.get('success', False):
+                        logger.info(self.log_message("Start game <y>Puzzle</y>"))
+                        await asyncio.sleep(random.uniform(3, 10))
+                        return await self.make_request(http_client, 'POST', endpoint="/durov/", json=answer)
         return None
 
     async def check_proxy(self, http_client: aiohttp.ClientSession) -> bool:
@@ -402,7 +412,7 @@ class Tapper:
                     if data_daily:
                         random.shuffle(data_daily)
                         for daily in data_daily:
-                            await asyncio.sleep(random.uniform(3,10))
+                            await asyncio.sleep(random.uniform(3, 10))
                             id = daily.get('id')
                             title = daily.get('title')
                             data_done = await self.done_tasks(http_client=http_client, task_id=id)
