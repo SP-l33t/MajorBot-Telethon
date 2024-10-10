@@ -11,7 +11,7 @@ from datetime import timedelta, datetime
 from better_proxy import Proxy
 from time import time
 
-from telethon import TelegramClient
+from opentele.tl import TelegramClient
 from telethon.errors import *
 from telethon.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer, InputUser
 from telethon.functions import messages, channels, account
@@ -46,7 +46,7 @@ class Tapper:
 
         session_config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
 
-        if not all(key in session_config for key in ('api_id', 'api_hash', 'user_agent')):
+        if not all(key in session_config for key in ('api', 'user_agent')):
             logger.critical(self.log_message('CHECK accounts_config.json as it might be corrupted'))
             exit(-1)
 
@@ -78,11 +78,8 @@ class Tapper:
                     self._webview_data = {'peer': peer, 'app': input_bot_app}
                     break
                 except FloodWaitError as fl:
-                    fls = fl.seconds
-
-                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fls}s"))
-                    await asyncio.sleep(fls + 3)
-
+                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
+                    await asyncio.sleep(fl.seconds + 3)
                 except (UnauthorizedError, AuthKeyUnregisteredError):
                     raise InvalidSession(f"{self.session_name}: User is unauthorized")
                 except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
@@ -160,11 +157,15 @@ class Tapper:
                         )
                     ))
 
-                    logger.info(self.log_message(f"Subscribe to channel: <y>{channel_title}</y>"))
+                    logger.info(self.log_message(f"Subscribed to channel: <y>{channel_title}</y>"))
+                except FloodWaitError as fl:
+                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
+                    return fl.seconds
                 except Exception as e:
-                    log_error(self.log_message(f"(Task) Error while subscribing to tg channel: {e}"))
+                    log_error(self.log_message(f"(Task) Error while subscribing to tg channel {link}: {e}"))
 
             await asyncio.sleep(random.uniform(15, 20))
+        return
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
@@ -281,10 +282,10 @@ class Tapper:
                     "task_id": task_id,
                     "payload": {"code": answer}
                 }
-                logger.info(f"{self.session_name} | Attempting YouTube task: <y>{task_title}</y>")
+                logger.info(self.log_message(f"Attempting YouTube task: <y>{task_title}</y>"))
                 response = await self.make_request(http_client, 'POST', endpoint="/tasks/", json=payload)
                 if response and response.get('is_completed') is True:
-                    logger.info(f"{self.session_name} | Completed YouTube task: <y>{task_title}</y>")
+                    logger.success(f"{self.session_name} | Completed YouTube task: <y>{task_title}</y>")
                     return True
         return False
 
@@ -422,6 +423,7 @@ class Tapper:
                                     f"Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>"))
 
                     data_task = await self.get_tasks(http_client=http_client)
+                    floodwait = 0
                     if data_task:
                         random.shuffle(data_task)
                         for task in data_task:
@@ -432,11 +434,12 @@ class Tapper:
                                 await self.youtube_answers(http_client=http_client, task_id=id, task_title=title)
                                 continue
 
-                            if task.get('type') == 'subscribe_channel' or \
-                                    re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', ""), re.IGNORECASE):
+                            if (task.get('type') == 'subscribe_channel' or
+                                re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', ""),
+                                           re.IGNORECASE)) and not floodwait:
                                 if not settings.TASKS_WITH_JOIN_CHANNEL:
                                     continue
-                                await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
+                                floodwait = self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
                                 await asyncio.sleep(random.uniform(10, 20))
 
                             data_done = await self.done_tasks(http_client=http_client, task_id=id)
