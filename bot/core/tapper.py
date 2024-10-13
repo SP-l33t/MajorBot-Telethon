@@ -439,7 +439,7 @@ class Tapper:
                                            re.IGNORECASE)) and not floodwait:
                                 if not settings.TASKS_WITH_JOIN_CHANNEL:
                                     continue
-                                floodwait = self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
+                                floodwait = await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
                                 await asyncio.sleep(random.uniform(10, 20))
 
                             data_done = await self.done_tasks(http_client=http_client, task_id=id)
