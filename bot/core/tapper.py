@@ -424,6 +424,7 @@ class Tapper:
 
                     data_task = await self.get_tasks(http_client=http_client)
                     floodwait = 0
+                    subscribed_to = 0
                     if data_task:
                         random.shuffle(data_task)
                         for task in data_task:
@@ -437,10 +438,11 @@ class Tapper:
                             if (task.get('type') == 'subscribe_channel' or
                                 re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', ""),
                                            re.IGNORECASE)) and not floodwait:
-                                if not settings.TASKS_WITH_JOIN_CHANNEL:
+                                if not settings.TASKS_WITH_JOIN_CHANNEL or subscribed_to > 1:
                                     continue
                                 floodwait = await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
                                 await asyncio.sleep(random.uniform(10, 20))
+                                subscribed_to += 1
 
                             data_done = await self.done_tasks(http_client=http_client, task_id=id)
                             if data_done and data_done.get('is_completed') is True:
