@@ -7,6 +7,7 @@ fasteners
 loguru~=0.7.2
 opentele==1.15.1
 pydantic-settings==2.4.0
+pyrogram==2.0.106
 PySocks==1.7.1
 python-socks==2.5.1
 Telethon==1.36.0

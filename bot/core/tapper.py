@@ -175,7 +175,7 @@ class Tapper:
         return await response.json()
 
     @error_handler
-    async def login(self, http_client, init_data, ref_id):
+    async def login(self, http_client, init_data):
         response = await self.make_request(http_client, 'POST', endpoint="/auth/tg/", json={"init_data": init_data})
         if response and response.get("access_token", None):
             return response
