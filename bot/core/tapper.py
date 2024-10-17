@@ -4,21 +4,19 @@ import functools
 import json
 import os
 import random
-from urllib.parse import unquote
+import re
+from urllib.parse import unquote, parse_qs
 from aiocfscrape import CloudflareScraper
 from aiohttp_proxy import ProxyConnector
 from datetime import timedelta, datetime
 from better_proxy import Proxy
 from time import time
 
-from opentele.tl import TelegramClient
-from telethon.errors import *
-from telethon.types import InputBotAppShortName, InputPeerNotifySettings, InputNotifyPeer, InputUser
-from telethon.functions import messages, channels, account
+from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
 from typing import Callable
-from bot.utils import logger, log_error, proxy_utils, config_utils, AsyncInterProcessLock, CONFIG_PATH
+from bot.utils import logger, log_error, config_utils, CONFIG_PATH, first_run
 from bot.exceptions import InvalidSession
 from .headers import headers, get_sec_ch_ua
 
@@ -35,13 +33,9 @@ def error_handler(func: Callable):
 
 
 class Tapper:
-    def __init__(self, tg_client: TelegramClient):
+    def __init__(self, tg_client: UniversalTelegramClient):
         self.tg_client = tg_client
-        self.session_name, _ = os.path.splitext(os.path.basename(tg_client.session.filename))
-        self.config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
-        self.proxy = self.config.get('proxy')
-        self.lock = AsyncInterProcessLock(
-            os.path.join(os.path.dirname(CONFIG_PATH), 'lock_files', f"{self.session_name}.lock"))
+        self.session_name = tg_client.session_name
         self.headers = headers
 
         session_config = config_utils.get_session_config(self.session_name, CONFIG_PATH)
@@ -57,8 +51,7 @@ class Tapper:
         self.proxy = session_config.get('proxy')
         if self.proxy:
             proxy = Proxy.from_str(self.proxy)
-            proxy_dict = proxy_utils.to_telethon_proxy(proxy)
-            self.tg_client.set_proxy(proxy_dict)
+            self.tg_client.set_proxy(proxy)
 
         self.tg_web_data = None
         self.tg_client_id = 0
@@ -68,104 +61,15 @@ class Tapper:
     def log_message(self, message) -> str:
         return f"<ly>{self.session_name}</ly> | {message}"
 
-    async def initialize_webview_data(self):
-        if not self._webview_data:
-            while True:
-                try:
-                    peer = await self.tg_client.get_input_entity('major')
-                    bot_id = InputUser(user_id=peer.user_id, access_hash=peer.access_hash)
-                    input_bot_app = InputBotAppShortName(bot_id=bot_id, short_name="start")
-                    self._webview_data = {'peer': peer, 'app': input_bot_app}
-                    break
-                except FloodWaitError as fl:
-                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
-                    await asyncio.sleep(fl.seconds + 3)
-                except (UnauthorizedError, AuthKeyUnregisteredError):
-                    raise InvalidSession(f"{self.session_name}: User is unauthorized")
-                except (UserDeactivatedError, UserDeactivatedBanError, PhoneNumberBannedError):
-                    raise InvalidSession(f"{self.session_name}: User is banned")
+    async def get_tg_web_data(self) -> str:
+        webview_url = await self.tg_client.get_app_webview_url('major', "start", "525256526")
 
-    async def get_tg_web_data(self) -> tuple[str | None, str | None]:
-        if self.proxy and not self.tg_client._proxy:
-            logger.critical(self.log_message('Proxy found, but not passed to TelegramClient'))
-            exit(-1)
+        tg_web_data = unquote(string=webview_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
+        user_data = json.loads(parse_qs(tg_web_data).get('user', [''])[0])
 
-        init_data = None, None
-        async with self.lock:
-            try:
-                if not self.tg_client.is_connected():
-                    await self.tg_client.connect()
-                await self.initialize_webview_data()
-                await asyncio.sleep(random.uniform(1, 2))
+        self.tg_client_id = user_data.get('id')
 
-                ref_id = settings.REF_ID if random.randint(0, 100) <= 85 else "525256526"
-
-                web_view = await self.tg_client(messages.RequestAppWebViewRequest(
-                    **self._webview_data,
-                    platform='android',
-                    write_allowed=True,
-                    start_param=ref_id
-                ))
-
-                auth_url = web_view.url
-                tg_web_data = unquote(string=auth_url.split('tgWebAppData=')[1].split('&tgWebAppVersion')[0])
-
-                me = await self.tg_client.get_me()
-                self.tg_client_id = me.id
-                init_data = ref_id, tg_web_data
-
-            except InvalidSession:
-                raise
-
-            except Exception as error:
-                log_error(self.log_message(f"Unknown error during Authorization: {type(error).__name__}"))
-                await asyncio.sleep(delay=3)
-
-            finally:
-                if self.tg_client.is_connected():
-                    await self.tg_client.disconnect()
-                    await asyncio.sleep(15)
-
-        return init_data
-
-    async def join_and_mute_tg_channel(self, link: str):
-        path = link.replace("https://t.me/", "")
-        if path == 'money':
-            return
-
-        async with self.lock:
-            async with self.tg_client as client:
-                try:
-                    if path.startswith('+'):
-                        invite_hash = path[1:]
-                        result = await client(messages.ImportChatInviteRequest(hash=invite_hash))
-                        channel_title = result.chats[0].title
-                        entity = result.chats[0]
-                    else:
-                        entity = await client.get_entity(f'@{path}')
-                        await client(channels.JoinChannelRequest(channel=entity))
-                        channel_title = entity.title
-
-                    await asyncio.sleep(1)
-
-                    await client(account.UpdateNotifySettingsRequest(
-                        peer=InputNotifyPeer(entity),
-                        settings=InputPeerNotifySettings(
-                            show_previews=False,
-                            silent=True,
-                            mute_until=datetime.today() + timedelta(days=365)
-                        )
-                    ))
-
-                    logger.info(self.log_message(f"Subscribed to channel: <y>{channel_title}</y>"))
-                except FloodWaitError as fl:
-                    logger.warning(self.log_message(f"FloodWait {fl}. Waiting {fl.seconds}s"))
-                    return fl.seconds
-                except Exception as e:
-                    log_error(self.log_message(f"(Task) Error while subscribing to tg channel {link}: {e}"))
-
-            await asyncio.sleep(random.uniform(15, 20))
-        return
+        return tg_web_data
 
     @error_handler
     async def make_request(self, http_client, method, endpoint=None, url=None, **kwargs):
@@ -331,7 +235,6 @@ class Tapper:
 
         access_token_created_time = 0
         init_data = None
-        ref_id = None
 
         token_live_time = random.randint(3500, 3600)
 
@@ -345,7 +248,7 @@ class Tapper:
 
                 try:
                     if time() - access_token_created_time >= token_live_time:
-                        ref_id, init_data = await self.get_tg_web_data()
+                        init_data = await self.get_tg_web_data()
 
                         if not init_data:
                             logger.warning(self.log_message('Failed to get webview URL'))
@@ -355,13 +258,15 @@ class Tapper:
                     access_token_created_time = time()
                     sleep_time = random.randint(settings.SLEEP_TIME[0], settings.SLEEP_TIME[1])
 
-                    user_data = await self.login(http_client=http_client, init_data=init_data, ref_id=ref_id)
+                    user_data = await self.login(http_client=http_client, init_data=init_data)
                     if not user_data:
                         logger.warning(self.log_message(f"<r>Failed login</r>. Sleep <y>{sleep_time}s</y>"))
                         await asyncio.sleep(delay=sleep_time)
                         continue
 
                     http_client.headers['Authorization'] = "Bearer " + user_data.get("access_token")
+                    if self.tg_client.is_fist_run:
+                        await first_run.append_recurring_session(self.session_name)
                     logger.info(self.log_message(f"<y>⭐ Login successful</y>"))
                     user = user_data.get('user')
                     squad_id = user.get('squad_id')
@@ -423,7 +328,7 @@ class Tapper:
                                     f"Daily Task : <y>{daily.get('title')}</y> | Reward : <y>{daily.get('award')}</y>"))
 
                     data_task = await self.get_tasks(http_client=http_client)
-                    floodwait = 0
+                    fl = 0
                     subscribed_to = 0
                     if data_task:
                         random.shuffle(data_task)
@@ -437,10 +342,10 @@ class Tapper:
 
                             if (task.get('type') == 'subscribe_channel' or
                                 re.findall(r'(Join|Subscribe|Follow).*?channel', task.get('title', ""),
-                                           re.IGNORECASE)) and not floodwait:
-                                if not settings.TASKS_WITH_JOIN_CHANNEL or subscribed_to > 1:
+                                           re.IGNORECASE)) and not fl:
+                                if not settings.TASKS_WITH_JOIN_CHANNEL or subscribed_to >= 1:
                                     continue
-                                floodwait = await self.join_and_mute_tg_channel(link=task.get('payload').get('url'))
+                                fl = await self.tg_client.join_and_mute_tg_channel(link=task.get('payload').get('url'))
                                 await asyncio.sleep(random.uniform(10, 20))
                                 subscribed_to += 1
 
@@ -461,7 +366,7 @@ class Tapper:
                 await asyncio.sleep(delay=sleep_time)
 
 
-async def run_tapper(tg_client: TelegramClient):
+async def run_tapper(tg_client: UniversalTelegramClient):
     runner = Tapper(tg_client=tg_client)
     try:
         await runner.run()

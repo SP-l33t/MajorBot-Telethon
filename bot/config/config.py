@@ -7,7 +7,9 @@ class Settings(BaseSettings):
     API_ID: int
     API_HASH: str
     GLOBAL_CONFIG_PATH: str = "TG_FARM"
-   
+
+    FIX_CERT: bool = False
+
     REF_ID: str = '525256526'
     TASKS_WITH_JOIN_CHANNEL: bool = True
     HOLD_COIN: list[int] = [915, 915]

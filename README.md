@@ -11,18 +11,23 @@
 > 🇷 🇺 README in russian available [here](README-RU.md)
 
 ## Features  
-|            Feature            | Supported |
-|:-----------------------------:|:---------:|
-|        Multithreading         |     ✅     |
-|   Proxy binding to session    |     ✅     |
-|         Auto Referral         |     ✅     |
-|        Auto Claim Task        |     ✅     |
-|         Auto Roulette         |     ✅     |
-|        Auto Hold Coins        |     ✅     |
-| Auto Swipe Coins            	 |     ✅     |
-|       Auto Puzzle Pavel       |     ✅     |
-|       Auto Daily Streak       |     ✅     |
-| Support for telethon .session |     ✅     |
+|                 Feature                 | Supported |
+|:---------------------------------------:|:---------:|
+|             Multithreading              |     ✅     |
+|        Proxy binding to session         |     ✅     |
+|              Auto Referral              |     ✅     |
+|             Auto Claim Task             |     ✅     |
+|              Auto Roulette              |     ✅     |
+|             Auto Hold Coins             |     ✅     |
+|            Auto Swipe Coins             |     ✅     |
+|            Auto Puzzle Pavel            |     ✅     |
+|            Auto Daily Streak            |     ✅     |
+| Supports telethon AND pyrogram .session |     ✅     |
+
+_Script searches for session files in the following folders:_
+* /sessions
+* /sessions/pyrogram
+* /session/telethon
 
 
 ## [Settings](https://github.com/GravelFire/MajorBot/blob/main/.env-example/)
@@ -30,6 +35,7 @@
 |:---------------------------:|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------:|
 |    **API_ID / API_HASH**    |                                                                                   Platform data from which to run the Telegram session (default - android)                                                                                    |
 |   **GLOBAL_CONFIG_PATH**    | Specifies the global path for accounts_config, proxies, sessions. <br/>Specify an absolute path or use an environment variable (default environment variable: **TG_FARM**) <br/>If no environment variable exists, uses the script directory. |
+|        **FIX_CERT**         |                                                                                           Try to fix  SSLCertVerificationError ( True / **False** )                                                                                           |
 | **TASKS_WITH_JOIN_CHANNEL** |                                                                                       Whether to perform tasks with joining channels (**True** / False)                                                                                       |
 |        **HOLD_COIN**        |                                                                                                 Ammount coins in Hold Coin (e.g. [585, 600])                                                                                                  |
 |       **SWIPE_COIN**        |                                                                                                Ammount coins in Swipe Coin (e.g. [2000, 3000])                                                                                                |

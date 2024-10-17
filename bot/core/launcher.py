@@ -4,8 +4,7 @@ import argparse
 import os
 from copy import deepcopy
 
-from opentele.tl import TelegramClient
-from telethon.network import ConnectionTcpAbridged
+from bot.utils.universal_telegram_client import UniversalTelegramClient
 
 from bot.config import settings
 from bot.core.agents import generate_random_user_agent
@@ -47,9 +46,9 @@ async def process() -> None:
     args = parser.parse_args()
 
     if not settings.USE_PROXY_FROM_FILE:
-        logger.info(f"Detected {len(get_session_names(SESSIONS_PATH))} sessions | USE_PROXY_FROM_FILE=False")
+        logger.info(f"Detected {len(get_sessions(SESSIONS_PATH))} sessions | USE_PROXY_FROM_FILE=False")
     else:
-        logger.info(f"Detected {len(get_session_names(SESSIONS_PATH))} sessions | "
+        logger.info(f"Detected {len(get_sessions(SESSIONS_PATH))} sessions | "
                     f"{len(proxy_utils.get_proxies(PROXIES_PATH))} proxies")
 
     action = args.action or prompt_user_action()
@@ -62,19 +61,21 @@ async def process() -> None:
         await register_sessions()
 
 
-def get_session_names(sessions_folder: str) -> list[str]:
-    session_names = sorted(glob.glob(f"{sessions_folder}/*.session"))
-    return [os.path.splitext(os.path.basename(file))[0] for file in session_names]
+def get_sessions(sessions_folder: str) -> list[str]:
+    session_names = glob.glob(f"{sessions_folder}/*.session")
+    session_names += glob.glob(f"{sessions_folder}/telethon/*.session")
+    session_names += glob.glob(f"{sessions_folder}/pyrogram/*.session")
+    return [file.replace('.session', '') for file in sorted(session_names)]
 
 
-async def get_tg_clients() -> list[TelegramClient]:
-    session_names = get_session_names(SESSIONS_PATH)
+async def get_tg_clients() -> list[UniversalTelegramClient]:
+    session_paths = get_sessions(SESSIONS_PATH)
 
-    if not session_names:
+    if not session_paths:
         raise FileNotFoundError("Session files not found")
-
     tg_clients = []
-    for session_name in session_names:
+    for session in session_paths:
+        session_name = os.path.basename(session)
         accounts_config = config_utils.read_config_file(CONFIG_PATH)
         session_config: dict = deepcopy(accounts_config.get(session_name, {}))
         if 'api' not in session_config:
@@ -86,14 +87,14 @@ async def get_tg_clients() -> list[TelegramClient]:
 
         if api:
             client_params = {
-                "session": os.path.join(SESSIONS_PATH, session_name),
+                "session": session,
                 "api": api
             }
         else:
             client_params = {
                 "api_id": api_config.get("api_id", API_ID),
                 "api_hash": api_config.get("api_hash", API_HASH),
-                "session": os.path.join(SESSIONS_PATH, session_name),
+                "session": session,
                 "lang_code": api_config.get("lang_code", "en"),
                 "system_lang_code": api_config.get("system_lang_code", "en-US")
             }
@@ -108,7 +109,7 @@ async def get_tg_clients() -> list[TelegramClient]:
 
         session_proxy = session_config.get('proxy')
         if not session_proxy and 'proxy' in session_config.keys():
-            tg_clients.append(TelegramClient(connection=ConnectionTcpAbridged, **client_params))
+            tg_clients.append(UniversalTelegramClient(**client_params))
             if accounts_config.get(session_name) != session_config:
                 await config_utils.update_session_config_in_file(session_name, session_config, CONFIG_PATH)
             continue
@@ -117,14 +118,14 @@ async def get_tg_clients() -> list[TelegramClient]:
             if settings.DISABLE_PROXY_REPLACE:
                 proxy = session_proxy or next(iter(proxy_utils.get_unused_proxies(accounts_config, PROXIES_PATH)), None)
             else:
-                proxy = await proxy_utils.get_working_proxy(accounts_config,
-                                                            session_proxy) if session_proxy or settings.USE_PROXY_FROM_FILE else None
+                proxy = await proxy_utils.get_working_proxy(accounts_config, session_proxy) \
+                    if session_proxy or settings.USE_PROXY_FROM_FILE else None
 
             if not proxy and (settings.USE_PROXY_FROM_FILE or session_proxy):
                 logger.warning(f"{session_name} | Didn't find a working unused proxy for session | Skipping")
                 continue
             else:
-                tg_clients.append(TelegramClient(connection=ConnectionTcpAbridged, **client_params))
+                tg_clients.append(UniversalTelegramClient(**client_params))
                 session_config['proxy'] = proxy
                 if accounts_config.get(session_name) != session_config:
                     await config_utils.update_session_config_in_file(session_name, session_config, CONFIG_PATH)
@@ -133,12 +134,13 @@ async def get_tg_clients() -> list[TelegramClient]:
 
 
 async def init_config_file():
-    session_names = get_session_names(SESSIONS_PATH)
+    session_paths = get_sessions(SESSIONS_PATH)
 
-    if not session_names:
+    if not session_paths:
         raise FileNotFoundError("Session files not found")
-    for session_name in session_names:
-        parsed_json = config_utils.import_session_json(os.path.join(SESSIONS_PATH, session_name))
+    for session in session_paths:
+        session_name = os.path.basename(session)
+        parsed_json = config_utils.import_session_json(session)
         if parsed_json:
             accounts_config = config_utils.read_config_file(CONFIG_PATH)
             session_config: dict = deepcopy(accounts_config.get(session_name, {}))
@@ -152,6 +154,5 @@ async def run_tasks():
     await config_utils.restructure_config(CONFIG_PATH)
     await init_config_file()
     tg_clients = await get_tg_clients()
-    exit(0)
     tasks = [asyncio.create_task(run_tapper(tg_client=tg_client)) for tg_client in tg_clients]
     await asyncio.gather(*tasks)
