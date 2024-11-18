@@ -377,7 +377,7 @@ class Tapper:
                             if task.get('is_completed', False) or task_id not in TASKS_WL:
                                 continue
 
-                            if randint(0, 3):
+                            if not randint(0, 2):
                                 logger.info(self.log_message(f"Randomly stopping doing tasks"))
                                 break
 
