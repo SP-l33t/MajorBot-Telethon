@@ -12,12 +12,12 @@ class Settings(BaseSettings):
 
     REF_ID: str = '525256526'
     TASKS_WITH_JOIN_CHANNEL: bool = True
+    PLAY_GAMES: bool = True
     HOLD_COIN: list[int] = [915, 915]
-    SWIPE_COIN: list[int] = [2000, 3000]
+    SWIPE_COIN: list[int] = [1200, 2000]
     SUBSCRIBE_SQUAD: str = ''
-    USE_RANDOM_DELAY_IN_RUN: bool = True
-    RANDOM_DELAY_IN_RUN: list[int] = [0, 30]
-    SLEEP_TIME: list[int] = [1800, 3600]
+    SESSION_START_DELAY: int = 3600
+    SLEEP_TIME: list[int] = [7200, 18400]
     
     SESSIONS_PER_PROXY: int = 1
     USE_PROXY_FROM_FILE: bool = True
